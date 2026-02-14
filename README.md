@@ -42,9 +42,9 @@ RAW Video (12-bit Bayer RGGB)
          ↓
 [5] CCM                  → Color Correction Matrix
          ↓
-[6] LTM                  → Local Tone Mapping (HDR → SDR)
+[6] LTM                  → Local Tone Mapping 
          ↓
-[7] GammaCorrection      → Gamma encoding (linear → perceptual)
+[7] GammaCorrection      → Gamma encoding
          ↓
 [8] RGB2YUV              → NV12 format (4:2:0 subsampling)
          ↓
