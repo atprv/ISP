@@ -1,31 +1,31 @@
 # Traditional ISP Pipeline
 
-Полнофункциональный Image Signal Processor (ISP), реализованный на PyTorch с поддержкой GPU ускорения.
+An Image Signal Processor (ISP) implemented in PyTorch with GPU acceleration support.
 
-## Содержание
+## Table of Contents
 
-- [Описание](#описание)
-- [Архитектура](#архитектура)
-- [Использование](#использование)
-- [Конфигурация](#конфигурация)
-- [Этапы обработки](#этапы-обработки)
-- [Структура проекта](#структура-проекта)
+- [Description](#description)
+- [Architecture](#architecture)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Processing Stages](#processing-stages)
+- [Project Structure](#project-structure)
 
-## Описание
+## Description
 
- Проект представляет собой традиционный ISP pipeline, который преобразует RAW данные с камеры (Bayer pattern) в стандартный YUV формат. Данная реализация использует PyTorch для GPU-ускорения и обеспечивает обработку видео в реальном времени.
+This project represents a traditional ISP pipeline that converts RAW camera data (Bayer pattern) into standard YUV format. This implementation uses PyTorch for GPU acceleration and provides real-time video processing.
 
-### Ключевые особенности
+### Key Features
 
-- **GPU-ускорение** через PyTorch CUDA
-- **Полный ISP pipeline** (8 этапов обработки)
-- **Real-time обработка** благодаря оптимизациям
-- **Асинхронный I/O** для минимизации задержек
-- **Гибкая конфигурация** через TOML файлы
-- **Модульная архитектура** - каждый этап независим
-- **CLI интерфейс** с подробной статистикой
+- **GPU acceleration** via PyTorch CUDA
+- **Complete ISP pipeline** (8 processing stages)
+- **Real-time processing** 
+- **Asynchronous I/O** to minimize latency
+- **Flexible configuration** via TOML files
+- **Modular architecture** - each stage is independent
+- **CLI interface** with detailed statistics
 
-## Архитектура
+## Architecture
 
 ### Pipeline Flow
 
@@ -34,7 +34,7 @@ RAW Video (12-bit Bayer RGGB)
          ↓
 [1] DecompandBlackLevel  → 24-bit linear + black level subtraction
          ↓
-[2] BayerDenoise         → Guided Filter на Bayer pattern
+[2] BayerDenoise         → Guided Filter on Bayer pattern
          ↓
 [3] AWB                  → Auto White Balance (Gray/White World)
          ↓
@@ -42,7 +42,7 @@ RAW Video (12-bit Bayer RGGB)
          ↓
 [5] CCM                  → Color Correction Matrix
          ↓
-[6] LTM                  → Local Tone Mapping 
+[6] LTM                  → Local Tone Mapping
          ↓
 [7] GammaCorrection      → Gamma encoding
          ↓
@@ -51,17 +51,17 @@ RAW Video (12-bit Bayer RGGB)
 YUV Video (NV12, 8-bit)
 ```
 
-### Компоненты системы
+### System Components
 
-- **ISP Pipeline** - основной процессор изображений
-- **Config Reader** - загрузка параметров камеры из TOML
-- **Video Reader** - streaming чтение RAW данных
-- **Video Writer** - асинхронная запись YUV
-- **Main** - CLI и оркестрация процесса
+- **ISP Pipeline** - main image processor
+- **Config Reader** - loads camera parameters from TOML
+- **Video Reader** - streaming RAW data reading
+- **Video Writer** - asynchronous YUV writing
+- **Main** - CLI and process orchestration
 
-## Использование
+## Usage
 
-### Базовое использование
+### Basic Usage
 
 ```bash
 python main.py \
@@ -70,7 +70,7 @@ python main.py \
     --output path/to/output.yuv
 ```
 
-### Расширенное использование с параметрами
+### Advanced Usage with Parameters
 
 ```bash
 python main.py \
@@ -88,61 +88,61 @@ python main.py \
     --gamma 2.2
 ```
 
-### Параметры командной строки
+### Command Line Parameters
 
-#### Основные параметры
+#### Main Parameters
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |----------|----------|--------------|
-| `--video` | Путь к RAW видео файлу | *обязательный* |
-| `--config` | Путь к TOML конфигурации камеры | *обязательный* |
-| `--output` | Путь к выходному YUV файлу | *обязательный* |
-| `--device` | Устройство (`cuda` / `cpu`) | `cuda` |
-| `--max-frames` | Максимальное количество кадров | `None` (все) |
-| `--quiet` | Отключить вывод статистики | `False` |
+| `--video` | Path to RAW video file | *required* |
+| `--config` | Path to camera TOML configuration | *required* |
+| `--output` | Path to output YUV file | *required* |
+| `--device` | Device (`cuda` / `cpu`) | `cuda` |
+| `--max-frames` | Maximum number of frames | `None` (all) |
+| `--quiet` | Disable statistics output | `False` |
 
-#### AWB параметры
+#### AWB Parameters
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |----------|----------|--------------|
-| `--awb-method` | Метод AWB (`gray_world` / `white_world`) | `gray_world` |
-| `--awb-max-gain` | Максимальное усиление | `4.0` |
-| `--awb-percentile` | Процентиль для white_world | `99.0` |
+| `--awb-method` | AWB method (`gray_world` / `white_world`) | `gray_world` |
+| `--awb-max-gain` | Maximum gain | `4.0` |
+| `--awb-percentile` | Percentile for white_world | `99.0` |
 
-#### Denoise параметры
+#### Denoise Parameters
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |----------|----------|--------------|
-| `--denoise-radius` | Радиус фильтра | `2` |
-| `--denoise-eps` | Epsilon регуляризации | `100.0` |
+| `--denoise-radius` | Filter radius | `2` |
+| `--denoise-eps` | Regularization epsilon | `100.0` |
 
-#### LTM параметры
+#### LTM Parameters
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |----------|----------|--------------|
-| `--ltm-a` | Коэффициент сжатия диапазона | `0.7` |
-| `--ltm-b` | Сдвиг яркости | `0.0` |
-| `--ltm-radius` | Радиус guided filter | `8` |
-| `--ltm-downsample` | Фактор downsample | `0.5` |
-| `--ltm-eps` | Epsilon для GF | `1e-3` |
+| `--ltm-a` | Dynamic range compression coefficient | `0.7` |
+| `--ltm-b` | Brightness shift | `0.0` |
+| `--ltm-radius` | Guided filter radius | `8` |
+| `--ltm-downsample` | Downsample factor | `0.5` |
+| `--ltm-eps` | Epsilon for GF | `1e-3` |
 
-#### Gamma параметры
+#### Gamma Parameters
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |----------|----------|--------------|
-| `--gamma` | Значение гаммы | `2.2` |
+| `--gamma` | Gamma value | `2.2` |
 
-## Конфигурация
+## Configuration
 
-### Формат TOML конфигурации
+### TOML Configuration Format
 
-Пример файла `camera_config.toml`:
+Example `camera_config.toml` file:
 
 ```toml
 [img]
 width = 1920
 height = 1080
-emb_lines = [0, 0]  # [top, bottom] embedded lines
+emb_lines = [0, 0] 
 
 [decompanding]
 black_level = 64
@@ -157,122 +157,122 @@ ccm_matrix = [
 ]
 ```
 
-### Параметры конфигурации
+### Configuration Parameters
 
-#### `[img]` - Параметры изображения
-- `width` - ширина кадра в пикселях
-- `height` - высота кадра в пикселях
-- `emb_lines` - количество embedded строк [сверху, снизу]
+#### `[img]` - Image Parameters
+- `width` - frame width in pixels
+- `height` - frame height in pixels
+- `emb_lines` - number of embedded lines [top, bottom]
 
-#### `[decompanding]` - Декомпандирование
-- `black_level` - уровень черного 
-- `compand_knee` - контрольные точки для LUT
-- `compand_lut` - индексы в LUT для каждой контрольной точки
+#### `[decompanding]` - Decompanding
+- `black_level` - black level
+- `compand_knee` - control points for LUT
+- `compand_lut` - LUT indices for each control point
 
 #### `[ccm]` - Color Correction Matrix
-- `ccm_matrix` - матрица 3×3 для цветокоррекции 
+- `ccm_matrix` - 3×3 matrix for color correction
 
-## Этапы обработки
+## Processing Stages
 
 ### 1. DecompandBlackLevel
 
-**Назначение:** Линеаризация данных + вычитание уровня черного
+**Purpose:** Data linearization + black level subtraction
 
-**Детали:**
-- Преобразование 12-bit companded → 24-bit linear через LUT
-- Вычитание black level интегрировано в LUT
-- Линейная интерполяция между контрольными точками
+**Details:**
+- Conversion from 12-bit companded to 24-bit linear via LUT
+- Black level subtraction integrated into LUT
+- Linear interpolation between control points
 
-**Вход:** `[H, W]` uint16, диапазон [0, 4095]  
-**Выход:** `[H, W]` int32, диапазон [0, 0xFFFFFF]
+**Input:** `[H, W]` uint16, range [0, 4095]  
+**Output:** `[H, W]` int32, range [0, 0xFFFFFF]
 
 ### 2. BayerDenoise
 
-**Назначение:** Шумоподавление с сохранением деталей
+**Purpose:** Noise reduction while preserving details
 
-**Алгоритм:** Fast Guided Filter
-- Фильтр, сохраняющий края
-- Обработка каждого канала Bayer независимо (R, Gr, Gb, B)
-- Батчевая обработка для эффективности
+**Algorithm:** Fast Guided Filter
+- Edge-preserving filter
+- Each Bayer channel processed independently (R, Gr, Gb, B)
+- Batch processing for efficiency
 
-**Вход/Выход:** `[H, W]` int32 Bayer pattern
+**Input/Output:** `[H, W]` int32 Bayer pattern
 
 ### 3. AWB (Auto White Balance)
 
-**Назначение:** Коррекция цветовой температуры освещения
+**Purpose:** Illumination color temperature correction
 
-**Методы:**
-- **Gray World** - предположение о среднем сером
-- **White World** - использование ярких областей (percentile)
+**Methods:**
+- **Gray World** - assumes average gray
+- **White World** - uses bright regions (percentile)
 
-**Принцип:** Нормализация R и B каналов относительно G
+**Principle:** Normalize R and B channels relative to G
 
-**Вход/Выход:** `[H, W]` int32 Bayer pattern
+**Input/Output:** `[H, W]` int32 Bayer pattern
 
 ### 4. Demosaic
 
-**Назначение:** Восстановление полного RGB из Bayer pattern
+**Purpose:** Reconstruct full RGB from Bayer pattern
 
-**Алгоритм:** Malvar-He-Cutler
-- 5×5 свертки для каждого типа интерполяции
-- Учет цветовых корреляций
-- Минимизация zipper и false color артефактов
+**Algorithm:** Malvar-He-Cutler
+- 5×5 convolutions for each interpolation type
+- Accounts for color correlations
+- Minimizes zipper and false color artifacts
 
-**Вход:** `[H, W]` int32 Bayer RGGB  
-**Выход:** `[H, W, 3]` int32 RGB
+**Input:** `[H, W]` int32 Bayer RGGB  
+**Output:** `[H, W, 3]` int32 RGB
 
 ### 5. CCM (Color Correction Matrix)
 
-**Назначение:** Преобразование цветового пространства сенсора в sRGB
+**Purpose:** Convert sensor color space to sRGB
 
-**Операция:** Матричное умножение 3×3
+**Operation:** 3×3 matrix multiplication
 
-**Вход:** `[H, W, 3]` int32, [0, 0xFFFFFF]  
-**Выход:** `[H, W, 3]` float32, [0, 1]
+**Input:** `[H, W, 3]` int32, [0, 0xFFFFFF]  
+**Output:** `[H, W, 3]` float32, [0, 1]
 
 ### 6. LTM (Local Tone Mapping)
 
-**Назначение:** Сжатие динамического диапазона 
+**Purpose:** Dynamic range compression
 
-**Алгоритм:** Base-Detail Decomposition
-1. Извлечение яркости (Rec.709)
-2. Log domain преобразование
-3. Guided Filter для выделения базовой компоненты
-4. Сжатие базовой, сохранение деталей
-5. Цветовое масштабирование
+**Algorithm:** Base-Detail Decomposition
+1. Extract luminance (Rec.709)
+2. Log domain transformation
+3. Guided Filter to extract base component
+4. Compress base, preserve details
+5. Color scaling
 
-**Оптимизации:**
+**Optimizations:**
 - Separable box filter
-- Downsample/Upsample для ускорения
+- Downsample/Upsample for speedup
 
-**Вход/Выход:** `[H, W, 3]` float32, [0, 1]
+**Input/Output:** `[H, W, 3]` float32, [0, 1]
 
 ### 7. GammaCorrection
 
-**Назначение:** Гамма-кодирование для корректного отображения
+**Purpose:** Gamma encoding for correct display
 
-**Формула:** `output = input^(1/γ)`
+**Formula:** `output = input^(1/γ)`
 
-**Стандарт:** γ=2.2 (sRGB approximation)
+**Standard:** γ=2.2 (sRGB approximation)
 
-**Вход/Выход:** `[H, W, 3]` float32, [0, 1]
+**Input/Output:** `[H, W, 3]` float32, [0, 1]
 
 ### 8. RGB2YUV
 
-**Назначение:** Конвертация в YUV NV12 формат
+**Purpose:** Convert to YUV NV12 format
 
-**Преобразование:** BT.709 full range
+**Conversion:** BT.709 full range
 
-**Subsampling:** 4:2:0 через average pooling
+**Subsampling:** 4:2:0 via average pooling
 
-**Формат NV12:**
-- Y plane: [H×W] полное разрешение
+**NV12 Format:**
+- Y plane: [H×W] full resolution
 - UV plane: [H/2×W/2] interleaved
 
-**Вход:** `[H, W, 3]` float32, [0, 1]  
-**Выход:** `[N]` uint8, где N = 1.5×H×W
+**Input:** `[H, W, 3]` float32, [0, 1]  
+**Output:** `[N]` uint8, where N = 1.5×H×W
 
-## Структура проекта
+## Project Structure
 
 ```
 traditional_ISP/
