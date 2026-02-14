@@ -1,121 +1,139 @@
 import torch
-from decompand import decompand
-from black_level import subtract_black_level
-from denoise import bayer_denoise
-from awb import awb_gray_world, awb_white_world
-from demosaic import demosaic
-from ccm import color_correction_matrix
-from ltm import local_tone_mapping
-from gamma import gamma_correction
-from rgb2yuv import rgb_to_yuv
+import torch.nn as nn
+
+from decompand import DecompandBlackLevel
+from denoise import BayerDenoise
+from awb import AWB
+from demosaic import Demosaic
+from ccm import CCM
+from ltm import LTM
+from gamma import GammaCorrection
+from rgb2yuv import RGBtoYUV
 
 
-class ISPPipeline:
+class ISPPipeline(nn.Module):
     """
     Полный ISP Pipeline для обработки RAW изображений
     """
     
-    def __init__(self, config: dict, **params):
+    def __init__(self, config: dict, device: str = 'cuda', **params):
         """
         Инициализация ISP pipeline
         
         Args:
             config: словарь конфигурации камеры
+            device: устройство для вычислений ('cuda' или 'cpu')
             **params: параметры для ISP блоков:
                 - awb_method: метод баланса белого ('gray_world' или 'white_world')
                 - awb_max_gain: максимальное усиление для AWB (по умолчанию 4.0)
-                - awb_percentile: процентиль для white_world AWB (по умолчанию 99.5)
-                - denoise_kernel: размер ядра для denoise (по умолчанию 3)
+                - awb_percentile: процентиль для white_world AWB (по умолчанию 99.0)
+                - denoise_radius: радиус guided filter для denoise (по умолчанию 2)
+                - denoise_eps: epsilon для denoise (по умолчанию 100.0)
                 - ltm_a: коэффициент сжатия для ltm (по умолчанию 0.7)
                 - ltm_b: сдвиг яркости для ltm (по умолчанию 0.0)
-                - ltm_radius: радиус guided filter (по умолчанию 32)
+                - ltm_radius: радиус guided filter (по умолчанию 8)
+                - ltm_downsample: downsample factor для LTM (по умолчанию 0.5)
+                - ltm_eps: epsilon для guided filter (по умолчанию 1e-3)
                 - gamma: значение гаммы (по умолчанию 2.2)
         """
-        self.config = config
+        super().__init__()
+        
+        # Определяем device
+        if device == 'cuda' and not torch.cuda.is_available():
+            print("Warning: CUDA requested but not available, falling back to CPU")
+            device = 'cpu'
+        
+        self.device = torch.device(device)
         
         # Значения по умолчанию
-        self.defaults = {'awb_method': 'gray_world',
-                         'awb_max_gain': 4.0,
-                         'awb_percentile': 99.5,
-                         'denoise_kernel': 3,
-                         'ltm_a': 0.7,
-                         'ltm_b': 0.0,
-                         'ltm_radius': 32,
-                         'gamma': 2.2}
+        defaults = {'awb_method': 'gray_world',
+                    'awb_max_gain': 4.0,
+                    'awb_percentile': 99.0,
+                    'denoise_radius': 2, 
+                    'denoise_eps': 100.0,
+                    'ltm_a': 0.7,
+                    'ltm_b': 0.0,
+                    'ltm_radius': 8,
+                    'ltm_downsample': 0.5,
+                    'ltm_eps': 1e-3,
+                    'gamma': 2.2}
         
-        # Параметры с значениями по умолчанию
-        self.params = {**self.defaults, **params}
+        # Объединяем с пользовательскими параметрами
+        self.params = {**defaults, **params}
         
-        # Создаем атрибуты для удобного доступа
-        for key, value in self.params.items():
-            setattr(self, key, value)
+        # Создаем все модули ISP pipeline
+        # 1. Decompand + Black Level
+        self.decompand_blacklevel = DecompandBlackLevel(config['decompanding'])
         
-    def process_frame(self, raw_frame: torch.Tensor, verbose: bool = False) -> torch.Tensor:
+        # 2. Bayer Denoise
+        self.denoise = BayerDenoise(radius=self.params['denoise_radius'],
+                                    eps=self.params['denoise_eps'])
+        
+        # 3. Auto White Balance
+        self.awb = AWB(method=self.params['awb_method'],
+                       max_gain=self.params['awb_max_gain'],
+                       percentile=self.params['awb_percentile'])
+        
+        # 4. Demosaic
+        self.demosaic = Demosaic()
+        
+        # 5. Color Correction Matrix
+        self.ccm = CCM(config['ccm'])
+        
+        # 6. Local Tone Mapping
+        self.ltm = LTM(a=self.params['ltm_a'],
+                       b=self.params['ltm_b'],
+                       radius=self.params['ltm_radius'],
+                       eps=self.params['ltm_eps'],
+                       downsample_factor=self.params['ltm_downsample'])
+        
+        # 7. Gamma Correction
+        self.gamma = GammaCorrection(gamma=self.params['gamma'])
+        
+        # 8. RGB to YUV
+        self.rgb2yuv = RGBtoYUV()
+        
+        # Перемещаем все на нужное устройство
+        self.to(self.device)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Обрабатывает один RAW кадр через полный ISP pipeline
         
         Args:
-            raw_frame: RAW кадр в формате Bayer RGGB (H x W), uint16
-            verbose: выводить информацию о каждом этапе
-            
+            x: RAW кадр в формате Bayer RGGB, shape: [H, W], dtype: uint16
+        
         Returns:
-            torch.Tensor: обработанный YUV кадр в формате NV12 (1D тензор)
+            torch.Tensor: обработанный YUV кадр в формате NV12, 1D тензор uint8
         """
+        x = x.to(self.device)
         
-        # 1. Decompand (12-bit → 24-bit linear)
-        frame = decompand(raw_frame, self.config)
+        # Pipeline stages
+        x = self.decompand_blacklevel(x)      # [H, W] uint16 -> [H, W] int32
+        x = self.denoise(x)                   # [H, W] int32 -> [H, W] int32
+        x = self.awb(x)                       # [H, W] int32 -> [H, W] int32
+        x = self.demosaic(x)                  # [H, W] int32 -> [H, W, 3] int32
+        x = self.ccm(x)                       # [H, W, 3] int32 -> [H, W, 3] float32 [0,1]
+        x = self.ltm(x)                       # [H, W, 3] float32 -> [H, W, 3] float32 [0,1]
+        x = self.gamma(x)                     # [H, W, 3] float32 -> [H, W, 3] float32 [0,1]
+        x = self.rgb2yuv(x)                   # [H, W, 3] float32 -> [N] uint8 (NV12)
         
-        # 2. Subtract Black Level
-        frame = subtract_black_level(frame, self.config)
-        
-        # 3. Bayer Denoise
-        frame = bayer_denoise(frame, kernel_size=self.denoise_kernel)
-        
-        # 4. Auto White Balance
-        if self.awb_method == 'gray_world':
-            frame = awb_gray_world(frame, max_gain=self.awb_max_gain)
-        elif self.awb_method == 'white_world':
-            frame = awb_white_world(frame, percentile=self.awb_percentile, max_gain=self.awb_max_gain)
-        else:
-            raise ValueError(f"Unknown AWB method: {self.awb_method}")
-        
-        # 5. Demosaic (Bayer → RGB)
-        frame = demosaic(frame)
-        
-        # Normalize to [0, 1]
-        frame = frame.float() / frame.float().max()
-        
-        # 6. Color Correction Matrix
-        frame = color_correction_matrix(frame, self.config)
-        
-        # 7. Local Tone Mapping
-        frame = local_tone_mapping(frame, a=self.ltm_a, b=self.ltm_b, radius=self.ltm_radius)
-        
-        # 8. Gamma Correction
-        frame = gamma_correction(frame, gamma=self.gamma)
-        
-        # 9. RGB → YUV 
-        yuv_frame = rgb_to_yuv(frame)
-        
-        return yuv_frame
+        return x
     
-    def set_awb_method(self, method: str):
-        """Изменить метод баланса белого"""
-        if method not in ['gray_world', 'white_world']:
-            raise ValueError(f"Unknown AWB method: {method}")
-        self.awb_method = method
-        
-      
-    def update_params(self, **params):
+    def get_pipeline_info(self) -> dict:
         """
-        Обновить параметры ISP на лету
+        Возвращает информацию о конфигурации pipeline
         
-        Args:
-            **params: любые параметры из __init__
+        Returns:
+            dict: параметры всех модулей
         """
-        for key, value in params.items():
-            if key in self.defaults:
-                self.params[key] = value
-                setattr(self, key, value)
-            else:
-                raise ValueError(f"Unknown parameter: {key}. Available: {list(self.defaults.keys())}")
+        return {'device': str(self.device),
+                'parameters': self.params,
+                'modules': ['DecompandBlackLevel',
+                            'BayerDenoise',
+                            'AWB',
+                            'Demosaic',
+                            'CCM',
+                            'LTM',
+                            'GammaCorrection',
+                            'RGBtoYUV']}
