@@ -66,7 +66,7 @@ def process_video(video_path: str, config_path: str, output_path: str,
     with RAWVideoReader(video_path, config, device=device) as reader, AsyncYUVWriter(output_path) as writer:
         
         with torch.no_grad():
-            # Делаем warmup чтобы не портить статистику
+            # Делаем warmup, чтобы не портить статистику
             if verbose:
                 print("Warming up CUDA kernels (compiling on first run)...")
                 
