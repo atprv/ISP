@@ -22,8 +22,8 @@ class DecompandBlackLevel(nn.Module):
         # Определяем device из входных тензоров
         device = compand_knee.device
 
-        # Создаем полную LUT таблицу
-        lut_full = torch.zeros(4096, dtype=torch.int32, device=device)
+        # Создаем LUT таблицу
+        lut_full = torch.zeros(4096, dtype=torch.float32, device=device)
 
         # Заполняем LUT таблицу интерполяцией
         for i in range(len(compand_knee) - 1):
@@ -35,14 +35,14 @@ class DecompandBlackLevel(nn.Module):
             # Линейная интерполяция
             num_points = end_idx - start_idx
             if num_points > 0:
-                segment_values = torch.linspace(start_val, end_val, steps=num_points, dtype=torch.int32, device=device)
+                segment_values = torch.linspace(start_val, end_val, steps=num_points, dtype=torch.float32, device=device)
                 lut_full[start_idx:end_idx] = segment_values
 
         # Последнее значение
-        lut_full[compand_lut[-1].item():] = compand_knee[-1].item()
+        lut_full[compand_lut[-1].item():] = float(compand_knee[-1].item())
 
         # Вычитаем black level
-        lut_full = lut_full - black_level
+        lut_full = lut_full - float(black_level)
 
         # Регистрируем объединённую LUT как buffer
         self.register_buffer('lut', lut_full)
@@ -55,7 +55,7 @@ class DecompandBlackLevel(nn.Module):
             x: входной кадр (12-битные данные), shape: [H, W]
 
         Returns:
-            torch.Tensor: обработанный кадр, shape: [H, W], dtype: int32, range: [0, 0xFFFFFF]
+            torch.Tensor: обработанный кадр, shape: [H, W], dtype: float32, range: [0, 0xFFFFFF]
         """
         x_int = x.to(torch.int32)
 
