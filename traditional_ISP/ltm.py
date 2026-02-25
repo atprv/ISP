@@ -15,7 +15,7 @@ class LTM(nn.Module):
             b: сдвиг яркости в лог-домене
             radius: радиус guided filter
             eps: регуляризующий параметр
-            downsample_factor: коэффициент downsampling 
+            downsample_factor: коэффициент downsampling
         """
         super().__init__()
 
@@ -52,7 +52,7 @@ class LTM(nn.Module):
         # Padding
         x_padded = F.pad(x, (self.pad, self.pad, self.pad, self.pad), mode='reflect')
 
-        # Separable convolution: horizontal then vertical
+        # Свертка
         x_h = F.conv2d(x_padded, self.box_h)
         x_hv = F.conv2d(x_h, self.box_v)
 
@@ -122,23 +122,23 @@ class LTM(nn.Module):
                                        scale_factor=self.downsample_factor,
                                        mode='bilinear',
                                        align_corners=False)
-            Y_log_down_2d = Y_log_down.squeeze(0).squeeze(0) 
+            Y_log_down_2d = Y_log_down.squeeze(0).squeeze(0)
 
             # Guided filter на downsampled версии
             Y_base_down = self._fast_guided_filter(Y_log_down_2d)
 
             # Upscale обратно к исходному размеру
-            Y_base_4d = Y_base_down.unsqueeze(0).unsqueeze(0)  
+            Y_base_4d = Y_base_down.unsqueeze(0).unsqueeze(0)
             Y_base_up = F.interpolate(Y_base_4d,
                                       size=(H, W),
                                       mode='bilinear',
                                       align_corners=False)
-            Y_base = Y_base_up.squeeze(0).squeeze(0) 
+            Y_base = Y_base_up.squeeze(0).squeeze(0)
         else:
             # Без downsampling
             Y_base = self._fast_guided_filter(Y_log)
 
-        # Detail layer
+        # Детали
         Y_detail = Y_log - Y_base
 
         # Tone mapping базовой компоненты
