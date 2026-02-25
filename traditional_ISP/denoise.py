@@ -42,7 +42,7 @@ class BayerDenoise(nn.Module):
 
     def _guided_filter_batch(self, I_batch: torch.Tensor) -> torch.Tensor:
         """
-        Guided filter для batch каналов 
+        Guided filter для batch каналов
 
         Args:
             I_batch: входной batch [B, 1, H, W]
@@ -54,7 +54,7 @@ class BayerDenoise(nn.Module):
         mean_I = self._fast_box_filter(I_batch)
         mean_II = self._fast_box_filter(I_batch * I_batch)
 
-        # Variance
+        # Дисперсия
         var_I = mean_II - mean_I * mean_I
 
         # Коэффициенты линейной модели
@@ -75,10 +75,10 @@ class BayerDenoise(nn.Module):
         Применяет fast denoise к Bayer изображению
 
         Args:
-            x: Bayer изображение RGGB, shape: [H, W], dtype: int32, range: [0, 0xFFFFFF]
+            x: Bayer изображение RGGB, shape: [H, W], dtype: float32, range: [0, 0xFFFFFF]
 
         Returns:
-            torch.Tensor: денойзированное изображение, shape: [H, W], dtype: int32, range: [0, 0xFFFFFF]
+            torch.Tensor: денойзированное изображение, shape: [H, W], dtype: float32, range: [0, 0xFFFFFF]
         """
         # Извлекаем каналы из Bayer паттерна
         r = x[::2, ::2]
@@ -87,7 +87,7 @@ class BayerDenoise(nn.Module):
         b = x[1::2, 1::2]
 
         # Объединяем все 4 канала в batch
-        channels = torch.stack([r.float(), gr.float(), gb.float(), b.float()], dim=0).unsqueeze(1)
+        channels = torch.stack([r, gr, gb, b], dim=0).unsqueeze(1)
 
         # Применяем guided filter ко всем каналам одновременно
         filtered_batch = self._guided_filter_batch(channels)
@@ -99,10 +99,10 @@ class BayerDenoise(nn.Module):
         b_filtered = filtered_batch[3, 0]
 
         # Собираем обратно в Bayer паттерн
-        output = torch.empty_like(x)
-        output[::2, ::2] = r_filtered.to(torch.int32)
-        output[::2, 1::2] = gr_filtered.to(torch.int32)
-        output[1::2, ::2] = gb_filtered.to(torch.int32)
-        output[1::2, 1::2] = b_filtered.to(torch.int32)
+        output = torch.empty_like(x, dtype=torch.float32)
+        output[::2, ::2] = r_filtered
+        output[::2, 1::2] = gr_filtered
+        output[1::2, ::2] = gb_filtered
+        output[1::2, 1::2] = b_filtered
 
         return output
