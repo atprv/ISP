@@ -40,7 +40,7 @@ RAW Video (12-bit Bayer RGGB)
          ↓
 [4] Demosaic             → Malvar-He-Cutler (Bayer → RGB)
          ↓
-[5] CCM                  → Color Correction Matrix
+[5] CCM                  → Color Correction Matrix + normalize
          ↓
 [6] LTM                  → Local Tone Mapping
          ↓
@@ -179,56 +179,57 @@ ccm_matrix = [
 **Purpose:** Data linearization + black level subtraction
 
 **Details:**
-- Conversion from 12-bit companded to 24-bit linear via LUT
-- Black level subtraction integrated into LUT
+- Converts 12-bit companded input to 24-bit linear via lookup table
+- Black level subtraction is baked into the LUT (no per-pixel subtraction at runtime)
 - Linear interpolation between control points
 
 **Input:** `[H, W]` uint16, range [0, 4095]  
-**Output:** `[H, W]` int32, range [0, 0xFFFFFF]
+**Output:** `[H, W]` float32, range [0, 0xFFFFFF]
 
 ### 2. BayerDenoise
 
 **Purpose:** Noise reduction while preserving details
 
 **Algorithm:** Fast Guided Filter
-- Edge-preserving filter
-- Each Bayer channel processed independently (R, Gr, Gb, B)
-- Batch processing for efficiency
+- Each Bayer channel (R, Gr, Gb, B) processed independently
+- All four channels batched into a single convolution call for efficiency
 
-**Input/Output:** `[H, W]` int32 Bayer pattern
+**Input:** `[H, W]` float32, range [0, 0xFFFFFF]  
+**Output:** `[H, W]` float32, range [0, 0xFFFFFF]
 
 ### 3. AWB (Auto White Balance)
 
-**Purpose:** Illumination color temperature correction
+**Purpose:** Color temperature correction
 
 **Methods:**
-- **Gray World** - assumes average gray
-- **White World** - uses bright regions (percentile)
+- **Gray World** — assumes scene average is neutral gray
+- **White World** — uses bright regions (configurable percentile)
 
-**Principle:** Normalize R and B channels relative to G
+**Principle:** R and B gains are computed relative to G, G channel is left unchanged
 
-**Input/Output:** `[H, W]` int32 Bayer pattern
+**Input:** `[H, W]` float32 Bayer RGGB, range [0, 0xFFFFFF]  
+**Output:** `[H, W]` float32 Bayer RGGB, range [0, 0xFFFFFF]
 
 ### 4. Demosaic
 
 **Purpose:** Reconstruct full RGB from Bayer pattern
 
 **Algorithm:** Malvar-He-Cutler
-- 5×5 convolutions for each interpolation type
+- 5×5 convolutions for each interpolation case
 - Accounts for color correlations
 - Minimizes zipper and false color artifacts
 
-**Input:** `[H, W]` int32 Bayer RGGB  
-**Output:** `[H, W, 3]` int32 RGB
+**Input:** `[H, W]` float32 Bayer RGGB, range [0, 0xFFFFFF]  
+**Output:** `[H, W, 3]` float32 RGB, range [0, 0xFFFFFF]
 
 ### 5. CCM (Color Correction Matrix)
 
 **Purpose:** Convert sensor color space to sRGB
 
-**Operation:** 3×3 matrix multiplication
+**Operation:** Normalize to [0, 1] then apply 3×3 matrix multiplication
 
-**Input:** `[H, W, 3]` int32, [0, 0xFFFFFF]  
-**Output:** `[H, W, 3]` float32, [0, 1]
+**Input:** `[H, W, 3]` float32, range [0, 0xFFFFFF]  
+**Output:** `[H, W, 3]` float32, range [0, 1]
 
 ### 6. LTM (Local Tone Mapping)
 
@@ -245,17 +246,19 @@ ccm_matrix = [
 - Separable box filter
 - Downsample/Upsample for speedup
 
-**Input/Output:** `[H, W, 3]` float32, [0, 1]
+**Input:** `[H, W, 3]` float32, range [0, 1]  
+**Output:** `[H, W, 3]` float32, range [0, 1]
 
 ### 7. GammaCorrection
 
-**Purpose:** Gamma encoding for correct display
+**Purpose:** Gamma encoding for correct display rendering
 
 **Formula:** `output = input^(1/γ)`
 
 **Standard:** γ=2.2 (sRGB approximation)
 
-**Input/Output:** `[H, W, 3]` float32, [0, 1]
+**Input:** `[H, W, 3]` float32, range [0, 1]  
+**Output:** `[H, W, 3]` float32, range [0, 1]
 
 ### 8. RGB2YUV
 
@@ -269,7 +272,7 @@ ccm_matrix = [
 - Y plane: [H×W] full resolution
 - UV plane: [H/2×W/2] interleaved
 
-**Input:** `[H, W, 3]` float32, [0, 1]  
+**Input:** `[H, W, 3]` float32, range [0, 1]   
 **Output:** `[N]` uint8, where N = 1.5×H×W
 
 ## Project Structure
